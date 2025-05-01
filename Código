@@ -1,0 +1,171 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from qiskit import QuantumCircuit, ClassicalRegister, QuantumRegister, transpile
+from qiskit_ibm_runtime import QiskitRuntimeService, Session, Sampler
+
+QiskitRuntimeService.save_account(channel="ibm_quantum", token="9e9ff701595e763e93446c1cc33cdbf923fd650af5b3128630170accf7b6d0c84504dbd4af34f462a16ef347fdb195ef28274ecbe565d7e15ac50621d6c310aa")
+service=QiskitRuntimeService()
+backends=service.backends()
+print(backends)
+
+backend_brisbane=service.backend('ibm_brisbane')
+backend_sherbrook=service.backend('ibm_sherbrooke')
+
+print('num de pending_jobs, brisbane:',backend_brisbane.status().pending_jobs, 'sherbrook:',backend_sherbrook.status().pending_jobs)
+print('num qbits, brisbane:', backend_brisbane.num_qubits, 'sherbrook:', backend_sherbrook.num_qubits)
+#create the circuit
+n=2
+grover_circuit=QuantumCircuit(n)
+
+#Function to initialize the circuit
+def initialize_s(qc, qubits):
+    for q in qubits:
+        qc.h(q)
+    return qc
+
+#initialize the circuit
+grover_circuit=initialize_s(grover_circuit, [0,1])
+grover_circuit.draw()
+
+#Define the oracle by adding CZ gates
+grover_circuit.cz(0,1)
+grover_circuit.draw()
+
+#Define the difusion opperator
+grover_circuit.h([0,1])
+grover_circuit.z([0,1])
+grover_circuit.cz(0,1)
+grover_circuit.h([0,1])
+grover_circuit.draw()
+
+grover_circuit.measure_all() 
+sampler=Sampler(backend_sherbrook)
+#Using the backends start the simulation
+transpiled_grover_circuit=transpile(grover_circuit, backend_sherbrook)
+job_sherbrook= sampler.run([transpiled_grover_circuit], shots=1024 )
+print(job_sherbrook.status())
+
+result=job_sherbrook.result()
+print(result[0].data.meas.get_counts())
+counts= result[0].data.meas.get_counts()
+
+print("Circuit before transpile:")
+print(grover_circuit)
+print("\nCircuit after transpile:")
+print(transpiled_grover_circuit)
+
+print( bits_np[0])
+from qiskit.visualization import plot_histogram
+
+plot_histogram(counts, title='Messurement Results')
+plt.show()
+
+labels=np.array(list(counts.keys()))
+values=np.array(list(counts.values()))
+
+values=values/np.sum(values, axis=0)
+
+plt.bar(labels, values, color="mediumpurple" , edgecolor="purple")
+plt.title("Meassurement Results: Probability")
+plt.xlabel("State")
+plt.ylabel("count")
+plt.show()
+
+#3Qbit implementation
+qc=QuantumCircuit(3)
+qc.cz(0,2)
+qc.cz(0,1)
+oracle=qc.to_gate()
+qc.name='U$_g'
+
+#Define a function for a general difusser that marks the states 101 110
+
+def difuse(num_qbits):
+  qc=QuantumCircuit(num_qbits)
+  #Hadamard Gates
+  for qbit in range(num_qbits):
+    qc.h(qbit)
+  #XGates transformation
+  for qbit in range(num_qbits):
+    qc.x(qbit)
+  #Implement a multicontrolledZgate
+  qc.h(num_qbits-1)
+  qc.append(MCXGate(num_qbits-1),list(range(num_qbits)))
+  qc.h(num_qbits-1)
+  for qbit in range(num_qbits):
+    qc.x(qbit)
+  for qbit in range(num_qbits):
+    qc.h(qbit)
+  U_s=qc.to_gate()
+  qc.name= "U$_d"
+  return U_s
+
+
+num_bits=3
+grover_circuit2=QuantumCircuit(num_bits)
+grover_circuit2=initialize_s(grover_circuit2, [0,1,2])
+grover_circuit2.append(oracle,[0,1,2])
+grover_circuit2.append(difuse(num_bits),[0,1,2])
+grover_circuit2.measure_all()
+grover_circuit2.draw()
+
+from qiskit.circuit.library import MCXGate
+
+#Using backends to simulate circuit
+transpiled_grover_circuit2= transpile(grover_circuit2, backend_sherbrook)
+job_sherbrook2= sampler.run([transpiled_grover_circuit2], shots=1024)
+
+print(job_sherbrook2.status())
+
+while not job_sherbrook2.done():
+  print("Still running",job_sherbrook2.status())
+  time.sleep(60)
+
+job_sherbrook2.done()
+
+result2=job_sherbrook2.result()
+counts2=result2[0].data.meas.get_counts()
+
+#Showing results
+labels2=np.array(list(counts2.keys()))
+values2=np.array(list(counts2.values()))
+
+values2=values2/np.sum(values2, axis=0)
+
+plt.bar(labels2,values2, color='blue', edgecolor='black')
+plt.xlabel('states')
+plt.ylabel('prob')
+plt.title('Measurements results')
+plt.show()
+
+#Simulation for 4 qbits
+num=4
+grover_circuit3=QuantumCircuit(num)
+grover_circuit3=initialize_s(grover_circuit3,[0,1,2,3])
+grover_circuit3.append(oracle, [0,1,2])
+grover_circuit3.append(difuse(num),[0,1,2,3])
+grover_circuit3.measure_all()
+grover_circuit3.draw()
+
+#Using backends to simulate circuits
+transpiled_grover_circuit3= transpile(grover_circuit3, backend_sherbrook)
+job_sherbrook3= sampler.run([transpiled_grover_circuit3], shots=1024)
+
+
+print(job_sherbrook3.status())
+
+result3=job_sherbrook3.result()
+counts3=result3[0].data.meas.get_counts()
+
+#Showcase results for 4 qbit sistem
+list3=np.array(list(counts3.keys()))
+values3=np.array(list(counts3.values()))
+
+values3=values3/np.sum(values3, axis=0)
+
+plt.bar(list3,values3, color='blue', edgecolor='black')
+plt.xlabel('states')
+plt.ylabel('prob')
+plt.title('Measurements results')
+plt.show()
